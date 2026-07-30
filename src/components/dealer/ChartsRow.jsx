@@ -1,9 +1,12 @@
+import { useEffect, useState } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   PieChart, Pie, Cell, ResponsiveContainer,
 } from "recharts";
+import { Cpu, CircleDashed } from "lucide-react";
 import { Card } from "../ui";
 import { DEMAND_FORECAST } from "../../data/equipment";
+import { predictDemand } from "../../api/mlClient";
 
 const DAY_LABELS = ["Day 1", "Day 2", "Day 3", "Day 4", "Day 5", "Day 6", "Day 7"];
 
@@ -27,7 +30,30 @@ function ChartTooltip({ active, payload, label }) {
 }
 
 export default function ChartsRow({ rows, healthyCount, atRiskCount, criticalCount }) {
-  const forecastData = DEMAND_FORECAST.map((v, i) => ({ day: DAY_LABELS[i], units: v }));
+  const [demandStatus, setDemandStatus] = useState("loading");
+  const [liveForecast, setLiveForecast] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    predictDemand({ horizonWeeks: 6 })
+      .then((data) => {
+        if (cancelled) return;
+        setLiveForecast(data.forecast);
+        setDemandStatus("live");
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setDemandStatus("offline");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const forecastData =
+    demandStatus === "live" && liveForecast
+      ? liveForecast.map((p) => ({ day: `Wk ${p.weeksOut}`, units: p.predictedUnits }))
+      : DEMAND_FORECAST.map((v, i) => ({ day: DAY_LABELS[i], units: v }));
   const engineIdleData = rows.map(({ eq }) => ({
     id: eq.id,
     "Engine Hours": eq.engineHours,
@@ -42,12 +68,25 @@ export default function ChartsRow({ rows, healthyCount, atRiskCount, criticalCou
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
       <Card className="p-5" delay={0}>
-        <h3 className="text-sm font-bold text-[#1A1A1A] mb-4">7-Day Demand Forecast</h3>
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          <h3 className="text-sm font-bold text-[#1A1A1A]">
+            {demandStatus === "live" ? "Demand Forecast — Next 6 Weeks" : "7-Day Demand Forecast"}
+          </h3>
+          {demandStatus === "live" ? (
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold rounded-full px-2 py-0.5" style={{ background: "#00C85116", color: "#00954A" }}>
+              <Cpu size={10} /> Live
+            </span>
+          ) : demandStatus === "offline" ? (
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold rounded-full px-2 py-0.5" style={{ background: "#F0EEE7", color: "#8A867A" }}>
+              <CircleDashed size={10} /> Sample data
+            </span>
+          ) : null}
+        </div>
         <ResponsiveContainer width="100%" height={240}>
           <BarChart data={forecastData} barCategoryGap="28%">
             <CartesianGrid stroke="#EFEDE5" strokeDasharray="3 3" vertical={false} />
             <XAxis dataKey="day" tick={AXIS_STYLE} axisLine={{ stroke: "#E4E1D8" }} tickLine={false} />
-            <YAxis domain={[0, 8]} tick={AXIS_STYLE} axisLine={{ stroke: "#E4E1D8" }} tickLine={false} width={28} />
+            <YAxis tick={AXIS_STYLE} axisLine={{ stroke: "#E4E1D8" }} tickLine={false} width={28} allowDecimals={false} />
             <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(255,205,17,0.12)" }} />
             <Bar dataKey="units" name="Units needed" fill="#FFCD11" radius={[4, 4, 0, 0]} maxBarSize={36} isAnimationActive animationDuration={900} />
           </BarChart>

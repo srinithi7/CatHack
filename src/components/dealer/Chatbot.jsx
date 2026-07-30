@@ -8,19 +8,26 @@ export default function ChatbotWidget() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([{ from: "bot", text: BOT_WELCOME }]);
   const [input, setInput] = useState("");
+  const [thinking, setThinking] = useState(false);
   const scrollRef = useRef(null);
 
   useEffect(() => {
     if (!open) return;
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, open]);
+  }, [messages, open, thinking]);
 
-  const send = (text) => {
+  const send = async (text) => {
     const trimmed = text.trim();
-    if (!trimmed) return;
-    const reply = getBotResponse(trimmed);
-    setMessages((prev) => [...prev, { from: "user", text: trimmed }, { from: "bot", text: reply }]);
+    if (!trimmed || thinking) return;
+    setMessages((prev) => [...prev, { from: "user", text: trimmed }]);
     setInput("");
+    setThinking(true);
+    try {
+      const reply = await getBotResponse(trimmed);
+      setMessages((prev) => [...prev, { from: "bot", text: reply }]);
+    } finally {
+      setThinking(false);
+    }
   };
 
   return (
@@ -73,6 +80,18 @@ export default function ChatbotWidget() {
                 </div>
               </div>
             ))}
+            {thinking && (
+              <div className="flex gap-2 max-w-[88%] self-start animate-fade-in-up">
+                <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style={{ background: "#1A1A1A", color: "#FFCD11" }}>
+                  <Bot size={14} />
+                </div>
+                <div className="rounded-xl px-3.5 py-2.5 text-sm flex items-center gap-1" style={{ background: "#F0EEE7", color: "#8A867A" }}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#8A867A] animate-pulse-dot" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#8A867A] animate-pulse-dot" style={{ animationDelay: "0.15s" }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#8A867A] animate-pulse-dot" style={{ animationDelay: "0.3s" }} />
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-2 px-4 pt-3 shrink-0" style={{ background: "#FFFFFF" }}>
@@ -80,7 +99,8 @@ export default function ChatbotWidget() {
               <button
                 key={s}
                 onClick={() => send(s)}
-                className="text-xs rounded-full px-3 py-1.5 border transition-colors hover:border-[#FFCD11] hover:text-[#8A6A00]"
+                disabled={thinking}
+                className="text-xs rounded-full px-3 py-1.5 border transition-colors hover:border-[#FFCD11] hover:text-[#8A6A00] disabled:opacity-50"
                 style={{ borderColor: "#E4E1D8", color: "#6E6B62" }}
               >
                 {s}
@@ -98,13 +118,15 @@ export default function ChatbotWidget() {
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
+              disabled={thinking}
               placeholder="Ask about anomalies, health, revenue..."
-              className="flex-1 min-w-0 rounded-xl border px-4 py-2.5 text-sm outline-none text-[#1A1A1A] placeholder:text-[#9A968D] focus:border-[#FFCD11] transition-colors"
+              className="flex-1 min-w-0 rounded-xl border px-4 py-2.5 text-sm outline-none text-[#1A1A1A] placeholder:text-[#9A968D] focus:border-[#FFCD11] transition-colors disabled:opacity-60"
               style={{ background: "#FAFAF8", borderColor: "#E4E1D8" }}
             />
             <button
               type="submit"
-              className="flex items-center justify-center rounded-xl px-4 py-2.5 font-semibold text-sm bg-[#FFCD11] text-[#1A1A1A] hover:brightness-95 transition shrink-0"
+              disabled={thinking}
+              className="flex items-center justify-center rounded-xl px-4 py-2.5 font-semibold text-sm bg-[#FFCD11] text-[#1A1A1A] hover:brightness-95 transition shrink-0 disabled:opacity-60"
               aria-label="Send message"
             >
               <Send size={16} />

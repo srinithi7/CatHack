@@ -1,7 +1,9 @@
 import { equipmentData, DEMAND_FORECAST, overdueDays } from "./equipment";
 import { detectAnomalies, fleetHealthScores, fleetMaintenancePredictions, fleetSummary } from "./algorithms";
+import { predictFleet, predictDemandSummary } from "../api/mlClient";
 
 const DAY_LABELS = ["Day 1", "Day 2", "Day 3", "Day 4", "Day 5", "Day 6", "Day 7"];
+const EQUIPMENT_ID_RE = /\b(EQX\d+)\b/i;
 
 function fmtMoney(n) {
   return `₹${n.toLocaleString("en-IN")}`;
@@ -19,16 +21,65 @@ const HELP_MENU = `I can help with:
 • "ghost" / "unassigned" — untracked equipment
 • "fuel" — low fuel equipment
 • "temperature" / "hot" — overheating equipment
-• "maintenance" / "predict" — maintenance forecast
+• "maintenance" / "predict" — maintenance forecast (live ML if backend is running)
+• "predict EQX1001" — ML maintenance + anomaly prediction for one machine
 • "cost" / "loss" / "revenue" — revenue loss analysis
 • "health" / "score" — all health scores
-• "forecast" / "demand" — 7-day demand forecast
+• "forecast" / "demand" — demand forecast (live ML if backend is running)
 • "best" / "good" — healthiest equipment
 • "worst" — most critical equipment
 
 Try asking me one of these!`;
 
-export function getBotResponse(rawInput, now = new Date()) {
+async function singleEquipmentPrediction(equipmentId) {
+  const eq = equipmentData.find((e) => e.id.toLowerCase() === equipmentId.toLowerCase());
+  if (!eq) return `I don't recognize ${equipmentId} — try one of: ${equipmentData.map((e) => e.id).join(", ")}.`;
+
+  try {
+    const [result] = await predictFleet([eq]);
+    const { maintenance: m, anomaly: a } = result;
+    const lines = [
+      `ML prediction for ${eq.id} (${eq.type}):`,
+      `• Maintenance due: ${m.maintenanceDue ? "Yes" : "No"} (${Math.round(m.confidence * 100)}% confidence)`,
+      `• Tier: ${m.tier} — next service in ~${m.daysUntilService} day(s)`,
+      `• Anomaly: ${a.isAnomaly ? "Flagged" : "Normal"}${a.reasons.length ? ` — ${a.reasons[0].feature.replace(/_/g, " ")} is ${a.reasons[0].direction} (${a.reasons[0].value} vs fleet avg ${a.reasons[0].fleetMean})` : ""}`,
+    ];
+    return lines.join("\n");
+  } catch {
+    return `I couldn't reach the ML backend to score ${eq.id}. Make sure the FastAPI service in backend/ is running on port 8000.`;
+  }
+}
+
+async function liveMaintenanceForecast() {
+  try {
+    const results = await predictFleet(equipmentData);
+    const critical = results.filter((r) => r.maintenance.tier === "PM1");
+    const warning = results.filter((r) => r.maintenance.tier === "PM2");
+    const normal = results.length - critical.length - warning.length;
+    return `Predictive Maintenance Forecast (live ML model):\n🔴 PM1 — Critical: ${listOrNone(
+      critical.map((r) => `${r.equipmentId} — due in ~${r.maintenance.daysUntilService}d`)
+    )}\n🟠 PM2 — Warning: ${listOrNone(
+      warning.map((r) => `${r.equipmentId} — due in ~${r.maintenance.daysUntilService}d`)
+    )}\n🟢 On schedule: ${normal} machine(s).`;
+  } catch {
+    return null;
+  }
+}
+
+async function liveDemandForecast() {
+  try {
+    const summary = await predictDemandSummary(4);
+    const topSites = [...summary.bySite].sort((a, b) => b.totalUnits - a.totalUnits).slice(0, 3);
+    const topTypes = [...summary.byType].sort((a, b) => b.totalUnits - a.totalUnits).slice(0, 3);
+    return `Demand forecast (live ML model, next ${summary.horizonWeeks} weeks):\nBy site: ${topSites
+      .map((s) => `${s.siteId}: ${s.totalUnits} units`)
+      .join(", ")}\nBy equipment type: ${topTypes.map((t) => `${t.type}: ${t.totalUnits} units`).join(", ")}\nAsk me "predict EQX1001" for a single-machine breakdown, or use the Demand Forecast Planner on the dashboard for the full per-site/type view.`;
+  } catch {
+    return null;
+  }
+}
+
+export async function getBotResponse(rawInput, now = new Date()) {
   const input = rawInput.trim();
   const test = (re) => re.test(input);
 
@@ -36,6 +87,11 @@ export function getBotResponse(rawInput, now = new Date()) {
   const health = fleetHealthScores();
   const maintenance = fleetMaintenancePredictions();
   const summary = fleetSummary(now);
+
+  const idMatch = input.match(EQUIPMENT_ID_RE);
+  if (idMatch && test(/\b(predict|prediction|ml|forecast)\b/i)) {
+    return singleEquipmentPrediction(idMatch[1]);
+  }
 
   if (test(/\b(hi|hello|hey)\b/i)) {
     return `Hello! I'm tracking ${summary.totalFleet} machines fleet-wide: ${summary.healthyCount} Healthy, ${summary.atRiskCount} At Risk, ${summary.criticalCount} Critical. ${anomalies.length} anomalies are currently flagged. Ask me about "critical", "overdue", "maintenance" or "revenue" for specifics.`;
@@ -95,9 +151,11 @@ export function getBotResponse(rawInput, now = new Date()) {
   }
 
   if (test(/\b(maintenance|predict|prediction)\b/i)) {
+    const live = await liveMaintenanceForecast();
+    if (live) return live;
     const critical = maintenance.filter((m) => m.level === "critical");
     const warning = maintenance.filter((m) => m.level === "warning");
-    return `Predictive Maintenance Forecast:\n🔴 Critical (24 hrs): ${listOrNone(critical.map((m) => `${m.equipment.id} — ${m.reasons[0]}`))}\n🟠 Warning (3 days): ${listOrNone(warning.map((m) => `${m.equipment.id} — ${m.reasons[0]}`))}\n🟢 Healthy: ${maintenance.length - critical.length - warning.length} machine(s) on schedule.`;
+    return `Predictive Maintenance Forecast (rule-based — ML backend offline):\n🔴 Critical (24 hrs): ${listOrNone(critical.map((m) => `${m.equipment.id} — ${m.reasons[0]}`))}\n🟠 Warning (3 days): ${listOrNone(warning.map((m) => `${m.equipment.id} — ${m.reasons[0]}`))}\n🟢 Healthy: ${maintenance.length - critical.length - warning.length} machine(s) on schedule.`;
   }
 
   if (test(/\b(cost|loss|revenue)\b/i)) {
@@ -112,7 +170,9 @@ export function getBotResponse(rawInput, now = new Date()) {
   }
 
   if (test(/\b(forecast|demand)\b/i)) {
-    return `7-day equipment demand forecast:\n${DEMAND_FORECAST.map((v, i) => `• ${DAY_LABELS[i]}: ${v} units needed`).join("\n")}`;
+    const live = await liveDemandForecast();
+    if (live) return live;
+    return `7-day equipment demand forecast (sample data — ML backend offline):\n${DEMAND_FORECAST.map((v, i) => `• ${DAY_LABELS[i]}: ${v} units needed`).join("\n")}`;
   }
 
   if (test(/\b(best|good)\b/i)) {
@@ -134,8 +194,8 @@ export function getBotResponse(rawInput, now = new Date()) {
 export const BOT_WELCOME = `Hello! I am your AI fleet assistant. I can help you with:
 • Equipment status and health scores
 • Anomaly detection and alerts
-• Predictive maintenance schedule
+• Predictive maintenance schedule (live ML model)
+• Demand forecasting (live ML model)
 • Revenue loss analysis
-• Demand forecasting
 
-Just ask me anything!`;
+Ask me "predict EQX1001" for a single-machine ML prediction. Just ask me anything!`;

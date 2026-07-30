@@ -1,4 +1,4 @@
-import { Sparkles, AlertOctagon, AlertTriangle, ShieldCheck } from "lucide-react";
+import { Sparkles, AlertOctagon, AlertTriangle, ShieldCheck, Cpu, CircleDashed } from "lucide-react";
 import { Card } from "../ui";
 
 const COLUMN_CONFIG = {
@@ -66,7 +66,7 @@ function Column({ level, items }) {
   );
 }
 
-export default function PredictiveMaintenancePanel({ maintenance }) {
+export default function PredictiveMaintenancePanel({ maintenance, mlStatus = "offline" }) {
   const grouped = {
     critical: maintenance.filter((m) => m.level === "critical"),
     warning: maintenance.filter((m) => m.level === "warning"),
@@ -75,12 +75,23 @@ export default function PredictiveMaintenancePanel({ maintenance }) {
 
   return (
     <Card className="p-5 sm:p-6">
-      <div className="flex items-center gap-2 mb-1">
+      <div className="flex items-center gap-2 mb-1 flex-wrap">
         <Sparkles size={18} className="text-[#8A6A00]" />
         <h2 className="text-lg font-bold text-[#1A1A1A]">Predictive Maintenance — Fleet Forecast</h2>
+        {mlStatus === "live" ? (
+          <span className="ml-auto sm:ml-2 inline-flex items-center gap-1.5 text-[11px] font-semibold rounded-full px-2.5 py-1" style={{ background: "#00C85116", color: "#00954A" }}>
+            <Cpu size={12} /> Live ML model (rf_model + tier_model + days_model)
+          </span>
+        ) : (
+          <span className="ml-auto sm:ml-2 inline-flex items-center gap-1.5 text-[11px] font-semibold rounded-full px-2.5 py-1" style={{ background: "#F0EEE7", color: "#8A867A" }}>
+            <CircleDashed size={12} /> {mlStatus === "loading" ? "Connecting to ML model…" : "Rule-based (ML backend offline)"}
+          </span>
+        )}
       </div>
       <p className="text-xs text-[#6E6B62] mb-4">
-        Rule-based failure-risk scoring across the fleet dataset.
+        {mlStatus === "live"
+          ? "Trained Random Forest models scoring failure risk from live fleet telemetry."
+          : "Rule-based failure-risk scoring across the fleet dataset."}
       </p>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Column level="critical" items={grouped.critical} />

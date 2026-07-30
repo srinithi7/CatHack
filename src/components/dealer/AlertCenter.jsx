@@ -1,4 +1,4 @@
-import { ShieldAlert, ShieldCheck } from "lucide-react";
+import { ShieldAlert, ShieldCheck, Cpu } from "lucide-react";
 import { Card } from "../ui";
 
 const SEVERITY_CONFIG = {
@@ -7,7 +7,14 @@ const SEVERITY_CONFIG = {
   MEDIUM: { color: "#FFCD11", textColor: "#8A6A00", label: "🟡 Medium", pulse: false },
 };
 
-export default function AlertCenter({ anomalies }) {
+const ML_COLOR = "#2196F3";
+
+function formatReason(r) {
+  const dir = r.direction === "high" ? "unusually high" : "unusually low";
+  return `${r.feature.replace(/_/g, " ")} is ${dir} (${r.value} vs fleet avg ${r.fleetMean})`;
+}
+
+export default function AlertCenter({ anomalies, mlAnomalies = [], mlStatus = "offline" }) {
   const deadManAlerts = anomalies.filter((a) => a.type === "Dead Man Alert");
   const groups = ["CRITICAL", "HIGH", "MEDIUM"].map((sev) => ({
     sev,
@@ -76,7 +83,38 @@ export default function AlertCenter({ anomalies }) {
             </div>
           );
         })}
-        {anomalies.length === 0 && (
+
+        {mlStatus === "live" && (
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wide mb-2 flex items-center gap-1.5" style={{ color: ML_COLOR }}>
+              <Cpu size={12} /> AI Anomaly Signals — Isolation Forest ({mlAnomalies.length})
+            </p>
+            <div className="flex flex-col gap-2">
+              {mlAnomalies.length === 0 && (
+                <p className="text-xs text-[#8A867A] italic px-1 py-1">No statistical outliers flagged by the ML model.</p>
+              )}
+              {mlAnomalies.map(({ eq, anomaly }) => (
+                <div
+                  key={eq.id}
+                  className="rounded-lg px-3.5 py-3 border-l-4"
+                  style={{ background: "#F5F9FE", borderLeftColor: ML_COLOR }}
+                >
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-bold text-[#1A1A1A]">Flagged because: {anomaly.reasons[0] ? anomaly.reasons[0].feature.replace(/_/g, " ") : "model score"}</p>
+                    <span className="ml-auto text-xs font-semibold text-[#8A6A00]">{eq.id}</span>
+                  </div>
+                  <p className="text-xs text-[#6E6B62] mt-1 leading-snug">
+                    {anomaly.reasons.length
+                      ? anomaly.reasons.map(formatReason).join("; ")
+                      : `Isolation Forest score ${anomaly.anomalyScore} — statistically unusual overall profile.`}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {anomalies.length === 0 && mlStatus !== "live" && (
           <p className="text-sm text-[#6E6B62] italic text-center py-8">No active alerts — fleet is healthy.</p>
         )}
       </div>
