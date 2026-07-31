@@ -85,3 +85,33 @@ export async function assignRedeploymentRequest(requestId, equipmentId) {
     assignedEquipment: equipmentId,
   });
 }
+
+// extensionRequests/{id} — equipmentId, companyName, currentCheckout,
+// extensionDays, requestedNewDate, estimatedCost, reason, status,
+// rejectionReason, timestamp
+export function useExtensionRequests() {
+  return useRealtimeValue("extensionRequests");
+}
+
+export async function createExtensionRequest(request) {
+  if (!isFirebaseConfigured) throw new Error("Firebase is not configured");
+  const newRef = push(ref(db, "extensionRequests"));
+  await set(newRef, {
+    ...request,
+    status: "pending",
+    rejectionReason: null,
+    timestamp: new Date().toISOString(),
+  });
+  return newRef.key;
+}
+
+export async function approveExtensionRequest(requestId, equipmentId, requestedNewDate) {
+  if (!isFirebaseConfigured) throw new Error("Firebase is not configured");
+  await update(ref(db, `extensionRequests/${requestId}`), { status: "approved" });
+  await update(ref(db, `equipment/${equipmentId}`), { checkOut: requestedNewDate });
+}
+
+export async function rejectExtensionRequest(requestId, rejectionReason) {
+  if (!isFirebaseConfigured) throw new Error("Firebase is not configured");
+  await update(ref(db, `extensionRequests/${requestId}`), { status: "rejected", rejectionReason });
+}

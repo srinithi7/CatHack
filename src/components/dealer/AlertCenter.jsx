@@ -1,4 +1,4 @@
-import { ShieldAlert, ShieldCheck, Cpu } from "lucide-react";
+import { ShieldAlert, ShieldCheck, Cpu, Radio } from "lucide-react";
 import { Card } from "../ui";
 
 const SEVERITY_CONFIG = {
@@ -14,7 +14,7 @@ function formatReason(r) {
   return `${r.feature.replace(/_/g, " ")} is ${dir} (${r.value} vs fleet avg ${r.fleetMean})`;
 }
 
-export default function AlertCenter({ anomalies, mlAnomalies = [], mlStatus = "offline" }) {
+export default function AlertCenter({ anomalies, mlAnomalies = [], mlStatus = "offline", rfidDeadManAlerts = [] }) {
   const deadManAlerts = anomalies.filter((a) => a.type === "Dead Man Alert");
   const groups = ["CRITICAL", "HIGH", "MEDIUM"].map((sev) => ({
     sev,
@@ -56,6 +56,28 @@ export default function AlertCenter({ anomalies, mlAnomalies = [], mlStatus = "o
       </div>
 
       <div className="flex flex-col gap-4 overflow-y-auto pr-1 max-h-[560px]">
+        {rfidDeadManAlerts.length > 0 && (
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wide mb-2 flex items-center gap-1.5" style={{ color: "#FF4444" }}>
+              <Radio size={12} /> Live RFID — Dead Man Alert ({rfidDeadManAlerts.length})
+            </p>
+            <div className="flex flex-col gap-2">
+              {rfidDeadManAlerts.map((eq) => (
+                <div key={eq.id} className="rounded-lg px-3.5 py-3 border-l-4" style={{ background: "#FFF3F3", borderLeftColor: "#FF4444" }}>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full animate-pulse-dot" style={{ background: "#FF4444" }} />
+                    <p className="text-sm font-bold text-[#1A1A1A]">Dead Man Alert</p>
+                    <span className="ml-auto text-xs font-semibold text-[#8A6A00]">{eq.id}</span>
+                  </div>
+                  <p className="text-xs text-[#6E6B62] mt-1 leading-snug">
+                    {eq.id} running without authenticated operator — RC522 reports no operator scanned.
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {groups.map(({ sev, items }) => {
           if (!items.length) return null;
           const cfg = SEVERITY_CONFIG[sev];

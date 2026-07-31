@@ -35,25 +35,25 @@ export default function SummaryCards({ summary }) {
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-2 gap-4">
       {cards.map((c, i) => (
         <Card
           key={c.label}
-          className="p-5 flex items-start justify-between gap-4"
+          className="p-5 flex flex-col items-center text-center gap-2"
           delay={i * 80}
           style={{ borderColor: `${c.color}40` }}
         >
-          <div className="min-w-0">
-            <p className="text-xs font-semibold text-[#6E6B62] mb-1">{c.label}</p>
-            <p
-              className={`text-2xl sm:text-3xl font-extrabold text-[#1A1A1A] leading-tight ${c.pulse ? "animate-pulse-dot" : ""}`}
-              style={c.pulse ? { color: c.color } : undefined}
-            >
-              {c.value}
-            </p>
+          <IconCircle icon={c.icon} color={c.color} size={30} boxSize={60} />
+          <p
+            className={`text-2xl font-extrabold text-[#1A1A1A] leading-tight ${c.pulse ? "animate-pulse-dot" : ""}`}
+            style={c.pulse ? { color: c.color } : undefined}
+          >
+            {c.value}
+          </p>
+          <div>
+            <p className="text-sm font-semibold text-[#1A1A1A]">{c.label}</p>
             <p className="text-xs text-[#8A867A] mt-0.5">{c.subtext}</p>
           </div>
-          <IconCircle icon={c.icon} color={c.color} />
         </Card>
       ))}
     </div>

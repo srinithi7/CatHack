@@ -70,6 +70,7 @@ export default function EquipmentTable({ rows, checkedIn, onToggleCheck }) {
               <th className="px-4 py-3 font-semibold">Type</th>
               <th className="px-4 py-3 font-semibold">Site</th>
               <th className="px-4 py-3 font-semibold">Operator</th>
+              <th className="px-4 py-3 font-semibold" title="From RC522 RFID sensor">RFID Status</th>
               <th className="px-4 py-3 font-semibold" title="From trained ML dataset">Engine Hrs</th>
               <th className="px-4 py-3 font-semibold" title="From trained ML dataset">Idle Hrs</th>
               <th className="px-4 py-3 font-semibold" title="From HC-SR04 ultrasonic sensor">Fuel %</th>
@@ -88,6 +89,8 @@ export default function EquipmentTable({ rows, checkedIn, onToggleCheck }) {
               const liveFuel = allSensors.status === "live" ? allSensors.data?.[eq.id]?.latest : null;
               const fuelLevel = liveFuel ? liveFuel.fuelLevel : eq.fuelLevel;
               const fuelSource = liveFuel ? liveFuel.fuelDataSource : "model";
+              const rfidStatus = liveFuel?.rfidStatus;
+              const rfidSource = liveFuel?.rfidDataSource;
               return (
                 <tr
                   key={eq.id}
@@ -114,6 +117,20 @@ export default function EquipmentTable({ rows, checkedIn, onToggleCheck }) {
                     ) : (
                       <span className="text-[#FF4444] font-semibold text-xs">NONE</span>
                     )}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    {rfidStatus === "authenticated" ? (
+                      <span className="inline-flex items-center gap-1.5 text-xs font-bold rounded-full px-2.5 py-1" style={{ background: "#00C85118", color: "#00954A" }}>
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#00C851] animate-pulse-dot" /> AUTHENTICATED
+                      </span>
+                    ) : rfidStatus === "none" ? (
+                      <span className="inline-flex items-center gap-1.5 text-xs font-bold rounded-full px-2.5 py-1" style={{ background: "#FF444418", color: "#E23B3B" }}>
+                        NO OPERATOR
+                      </span>
+                    ) : (
+                      <span className="text-xs text-[#9A968D]">—</span>
+                    )}
+                    {rfidStatus && <SensorValueBadge dataSource={rfidSource} className="mt-1" />}
                   </td>
                   <td className="px-4 py-3 w-28">
                     <div className="flex items-center gap-2">

@@ -44,14 +44,21 @@ export default function OperatorView({ onLogout }) {
         }
       : ruleBasedHealth;
 
-  const [session, setSession] = useState({ phase: "idle", startedAt: null, elapsed: 0, endedSummary: null });
+  const [session, setSession] = useState({ phase: "idle", startedAt: null, elapsed: 0, endedSummary: null, sessionOperator: null });
   const timerRef = useRef(null);
 
   const startScan = () => {
-    setSession({ phase: "scanning", startedAt: null, elapsed: 0, endedSummary: null });
+    setSession({ phase: "scanning", startedAt: null, elapsed: 0, endedSummary: null, sessionOperator: null });
     setTimeout(() => {
-      setSession({ phase: "active", startedAt: Date.now(), elapsed: 0, endedSummary: null });
+      setSession({ phase: "active", startedAt: Date.now(), elapsed: 0, endedSummary: null, sessionOperator: DEFAULT_OPERATOR });
     }, 2000);
+  };
+
+  const endSession = () => {
+    const durationSec = session.elapsed;
+    const minutes = (durationSec / 60).toFixed(1);
+    const engineHoursLogged = (durationSec / 3600).toFixed(2);
+    setSession({ phase: "ended", startedAt: null, elapsed: 0, endedSummary: { minutes, engineHoursLogged }, sessionOperator: null });
   };
 
   useEffect(() => {
@@ -62,12 +69,45 @@ export default function OperatorView({ onLogout }) {
     return () => clearInterval(timerRef.current);
   }, [session.phase, session.startedAt]);
 
-  const endSession = () => {
-    const durationSec = session.elapsed;
-    const minutes = (durationSec / 60).toFixed(1);
-    const engineHoursLogged = (durationSec / 3600).toFixed(2);
-    setSession({ phase: "ended", startedAt: null, elapsed: 0, endedSummary: { minutes, engineHoursLogged } });
-  };
+  // RFID drives the session directly from the DB fetch, not the button.
+  // The ESP32 fetches/writes every second regardless of a real tap, so the
+  // only signal that's actually meaningful is the VALUE changing — status
+  // flips to "authenticated" when a card is presented, and back to "none"
+  // when it's lifted off the reader. Repeated writes carrying the same
+  // value (the every-second heartbeat) are ignored outright, so it doesn't
+  // matter how often the DB is polled: idle → authenticated starts the
+  // session, and the matching drop back to "none" (tapping the card off
+  // the reader) ends it.
+  const prevRfidKey = useRef(undefined);
+  useEffect(() => {
+    if (sensor.status !== "live" || !sensor.data) return;
+    const status = sensor.data.rfidStatus;
+    if (status == null) return;
+    const operator = sensor.data.rfidOperator ?? DEFAULT_OPERATOR;
+    const key = `${status}:${operator}`;
+
+    if (prevRfidKey.current === key) return; // same value as last read — heartbeat, ignore
+    const isFirstRead = prevRfidKey.current === undefined;
+    prevRfidKey.current = key;
+    if (isFirstRead) return; // baseline only — don't start/stop anything on page load
+
+    setSession((s) => {
+      if (status === "authenticated") {
+        if (s.phase === "active" && s.sessionOperator === operator) return s;
+        return { phase: "active", startedAt: Date.now(), elapsed: 0, endedSummary: null, sessionOperator: operator };
+      }
+      // status === "none": card tapped off the reader — end the session if one's running.
+      if (s.phase !== "active") return s;
+      const durationSec = s.elapsed;
+      return {
+        phase: "ended",
+        startedAt: null,
+        elapsed: 0,
+        endedSummary: { minutes: (durationSec / 60).toFixed(1), engineHoursLogged: (durationSec / 3600).toFixed(2) },
+        sessionOperator: null,
+      };
+    });
+  }, [sensor.status, sensor.data?.rfidStatus, sensor.data?.rfidOperator]);
 
   const [checklist, setChecklist] = useState(CHECKLIST_ITEMS.map(() => false));
   const [checklistSubmitted, setChecklistSubmitted] = useState(false);
@@ -84,7 +124,7 @@ export default function OperatorView({ onLogout }) {
           <Gauge size={18} />
         </div>
         <div className="min-w-0">
-          <p className="font-extrabold text-[#1A1A1A] text-sm leading-tight">[SYSTEM_NAME]</p>
+          <p className="font-extrabold text-[#1A1A1A] text-sm leading-tight">CatArenT</p>
           <p className="text-[11px] text-[#8A867A] leading-tight truncate">Welcome, Operator {DEFAULT_OPERATOR}</p>
         </div>
         <button
@@ -149,12 +189,9 @@ export default function OperatorView({ onLogout }) {
 
         {/* RFID Session Panel */}
         <div className="rounded-2xl border p-6 flex flex-col items-center gap-4" style={{ background: "#FFFFFF", borderColor: "#E4E1D8", boxShadow: "0 1px 2px rgba(26,26,26,0.04)" }}>
-          {sensor.status === "live" && sensor.data?.rfidStatus && (
-            <div className="w-full flex items-center justify-between rounded-lg px-3 py-2 text-xs" style={{ background: "#F5F9FE" }}>
-              <span className="text-[#4A473F]">
-                RC522 status: <b>{sensor.data.rfidStatus}</b>
-                {sensor.data.rfidOperator ? ` — ${sensor.data.rfidOperator}` : ""}
-              </span>
+          {session.phase !== "active" && sensor.status === "live" && sensor.data?.rfidStatus === "none" && (
+            <div className="w-full flex items-center justify-between rounded-lg px-3 py-2 text-xs" style={{ background: "#FF444412" }}>
+              <span className="font-bold" style={{ color: "#E23B3B" }}>NO OPERATOR AUTHENTICATED</span>
               <SensorValueBadge dataSource={sensor.data.rfidDataSource} />
             </div>
           )}
@@ -184,9 +221,19 @@ export default function OperatorView({ onLogout }) {
           {session.phase === "active" && (
             <>
               <div className="text-center animate-fade-in-up">
-                <p className="text-[#00954A] font-bold text-lg">✅ Session Started</p>
-                <p className="text-xs text-[#6E6B62] mt-1">Time: {new Date(session.startedAt).toLocaleTimeString("en-IN", { hour12: true })}</p>
+                <p className="inline-flex items-center gap-2 text-[#00954A] font-bold text-lg">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#00C851] animate-pulse-dot" />
+                  Session Active — RFID Authenticated
+                </p>
+                <p className="text-xs text-[#6E6B62] mt-1">Operator: {session.sessionOperator ?? DEFAULT_OPERATOR}</p>
+                <p className="text-xs text-[#6E6B62]">Time: {new Date(session.startedAt).toLocaleTimeString("en-IN", { hour12: true })}</p>
                 <p className="text-xs text-[#6E6B62]">Machine: {eq.id}</p>
+                {sensor.status === "live" && sensor.data?.timestamp && (
+                  <p className="text-[11px] text-[#8A867A] mt-1">Last scan: {sensor.data.timestamp}</p>
+                )}
+                {sensor.status === "live" && (
+                  <p className="text-[11px] text-[#8A6A00] mt-1">Tap the card off the reader to end session</p>
+                )}
               </div>
               <p className="font-mono text-4xl font-extrabold text-[#1A1A1A] tracking-widest">
                 {pad(hh)}:{pad(mm)}:{pad(ss)}

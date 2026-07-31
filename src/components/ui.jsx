@@ -104,11 +104,11 @@ export function Card({ children, className = "", style = {}, delay = 0 }) {
   );
 }
 
-export function IconCircle({ icon: Icon, color, size = 20 }) {
+export function IconCircle({ icon: Icon, color, size = 20, boxSize = 40 }) {
   return (
     <div
       className="flex items-center justify-center rounded-lg shrink-0"
-      style={{ width: 40, height: 40, background: `${color}14`, color }}
+      style={{ width: boxSize, height: boxSize, background: `${color}14`, color }}
     >
       <Icon size={size} />
     </div>

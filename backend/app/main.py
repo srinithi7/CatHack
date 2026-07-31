@@ -14,7 +14,7 @@ from app.schemas import (
     MaintenancePredictionOut,
 )
 
-app = FastAPI(title="[SYSTEM_NAME] ML Inference API", version="1.0.0")
+app = FastAPI(title="CatArenT ML Inference API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,

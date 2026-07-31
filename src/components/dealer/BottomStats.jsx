@@ -2,8 +2,19 @@ import { Zap, MapPin } from "lucide-react";
 import { Card, ProgressBar } from "../ui";
 import { SITES, equipmentBySite } from "../../data/equipment";
 
-export default function BottomStats({ rows, totalIdleHours, revenueLoss }) {
+export default function BottomStats({ rows, totalIdleHours, revenueLoss, pushToast }) {
   const maxSiteCount = Math.max(1, ...SITES.map((s) => equipmentBySite(s.id).length));
+
+  const optimizeNow = () => {
+    const topOffenders = [...rows]
+      .sort((a, b) => b.eq.idleHours - a.eq.idleHours)
+      .slice(0, 3)
+      .map((r) => `${r.eq.id} (${r.eq.idleHours}h idle)`)
+      .join(", ");
+    pushToast?.(
+      `🎯 Optimization plan generated\nTop idle offenders: ${topOffenders}\nRecommend redeploying to active sites to recover ₹${revenueLoss.toLocaleString("en-IN")}.`
+    );
+  };
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -34,7 +45,10 @@ export default function BottomStats({ rows, totalIdleHours, revenueLoss }) {
             </tbody>
           </table>
         </div>
-        <button className="mt-4 w-full flex items-center justify-center gap-2 rounded-xl px-4 py-3 font-semibold text-sm bg-[#FFCD11] text-[#1A1A1A] hover:brightness-95 transition hover:-translate-y-0.5">
+        <button
+          onClick={optimizeNow}
+          className="mt-4 w-full flex items-center justify-center gap-2 rounded-xl px-4 py-3 font-semibold text-sm bg-[#FFCD11] text-[#1A1A1A] hover:brightness-95 transition hover:-translate-y-0.5"
+        >
           <Zap size={16} />
           Optimize now to recover ₹{revenueLoss.toLocaleString("en-IN")}
         </button>

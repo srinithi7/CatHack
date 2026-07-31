@@ -102,6 +102,19 @@ export function equipmentBySite(siteId) {
   return equipmentData.filter((eq) => eq.site === siteId);
 }
 
-export function equipmentByRenter(renterName) {
-  return equipmentData.filter((eq) => eq.renter === renterName);
+export function addDaysToDateStr(dateStr, days) {
+  const d = parseDate(dateStr);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+export const DAILY_RATE_BY_TYPE = {
+  Excavator: 8000,
+  Crane: 12000,
+  Bulldozer: 7000,
+  Grader: 6000,
+};
+
+export function dailyRateFor(type) {
+  return DAILY_RATE_BY_TYPE[type] ?? 7000;
 }
