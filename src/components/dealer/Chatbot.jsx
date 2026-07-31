@@ -42,10 +42,8 @@ export default function ChatbotWidget() {
               <Bot size={16} />
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-bold text-[#1A1A1A] leading-tight truncate">[CHATBOT_NAME] Assistant</p>
-              <p className="text-[11px] text-[#5C4B00] leading-tight flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#00954A]" /> Connected
-              </p>
+              <p className="text-sm font-bold text-[#1A1A1A] leading-tight truncate">🤖 CAT Bot</p>
+              <p className="text-[11px] text-[#5C4B00] leading-tight">Fleet Intelligence Assistant</p>
             </div>
             <button
               onClick={() => setOpen(false)}
@@ -137,7 +135,8 @@ export default function ChatbotWidget() {
 
       <button
         onClick={() => setOpen((o) => !o)}
-        aria-label={open ? "Hide fleet chatbot" : "Show fleet chatbot"}
+        aria-label={open ? "Hide CAT Bot" : "Ask CAT Bot"}
+        title="Ask CAT Bot"
         className="w-14 h-14 rounded-full flex items-center justify-center transition-transform hover:-translate-y-0.5 hover:scale-105"
         style={{ background: "#1A1A1A", color: "#FFCD11", boxShadow: "0 10px 28px rgba(26,26,26,0.35)" }}
       >

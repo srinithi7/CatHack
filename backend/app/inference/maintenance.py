@@ -17,6 +17,11 @@ FEATURE_ORDER = [
 
 CATEGORICAL_COLS = ["Type", "Site_ID", "Operator_ID", "Site_Dust_Level"]
 
+# tier_model's PM-tier classes double as a health-status severity mapping —
+# it's already a 3-level failure-risk classifier, just relabeled to match the
+# Healthy / At Risk / Critical vocabulary used across the rest of the app.
+TIER_TO_HEALTH_STATUS = {"None": "Healthy", "PM2": "At Risk", "PM1": "Critical"}
+
 # camelCase request field -> training column name
 FIELD_MAP = {
     "type": "Type",
@@ -73,21 +78,29 @@ def build_feature_row(payload: dict) -> tuple[pd.DataFrame, list[str], list[str]
 
 
 def predict_maintenance(payload: dict) -> dict:
+    """Random Forest Classifier (rf_model) scores failure/service-due risk;
+    Random Forest Regressor (days_model) scores time-to-failure. tier_model is
+    a second RF classifier used here purely for the Healthy/At Risk/Critical
+    health-status label. All three are joblib-serialized scikit-learn models."""
     X, used_fields, defaulted_fields = build_feature_row(payload)
 
     due_pred = registry.rf_model.predict(X)[0]
     due_proba = registry.rf_model.predict_proba(X)[0]
     classes = list(registry.rf_model.classes_)
     confidence = float(due_proba[classes.index(due_pred)])
+    failure_probability = float(due_proba[classes.index(1)])
 
-    tier_pred = registry.tier_model.predict(X)[0]
-    days_pred = float(registry.days_model.predict(X)[0])
+    tier_pred = str(registry.tier_model.predict(X)[0])
+    days_pred = max(0.0, float(registry.days_model.predict(X)[0]))
 
     return {
         "maintenanceDue": bool(due_pred),
         "confidence": round(confidence, 3),
-        "tier": str(tier_pred),
-        "daysUntilService": round(max(0.0, days_pred), 1),
+        "tier": tier_pred,
+        "healthStatus": TIER_TO_HEALTH_STATUS.get(tier_pred, "Healthy"),
+        "daysUntilService": round(days_pred, 1),
+        "hoursToFailure": round(days_pred * 24, 1),
+        "failureProbability": round(failure_probability * 100, 1),
         "usedFields": used_fields,
         "defaultedFields": defaulted_fields,
     }

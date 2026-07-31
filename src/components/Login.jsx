@@ -1,4 +1,4 @@
-import { Building2, Truck, User, Gauge } from "lucide-react";
+import { Building2, Truck, User, Gauge, Handshake } from "lucide-react";
 
 export default function Login({ onLogin }) {
   return (
@@ -37,6 +37,12 @@ export default function Login({ onLogin }) {
             label="Login as Operator"
             variant="outline"
             onClick={() => onLogin("operator")}
+          />
+          <LoginButton
+            icon={Handshake}
+            label="Login as Customer"
+            variant="outline"
+            onClick={() => onLogin("customer")}
           />
         </div>
       </div>

@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { Search, Shovel, Tractor, Construction, Forklift, LogIn, LogOut } from "lucide-react";
 import { ProgressBar, HealthBadge } from "../ui";
+import SensorValueBadge from "../SensorValueBadge";
+import { useAllSensorData } from "../../firebase/hooks";
 
 const TYPE_ICON = {
   Excavator: Shovel,
@@ -29,6 +31,7 @@ const MAINT_LABEL = {
 
 export default function EquipmentTable({ rows, checkedIn, onToggleCheck }) {
   const [search, setSearch] = useState("");
+  const allSensors = useAllSensorData();
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -40,7 +43,7 @@ export default function EquipmentTable({ rows, checkedIn, onToggleCheck }) {
 
   return (
     <div className="rounded-2xl border animate-fade-in-up" style={{ background: "#FFFFFF", borderColor: "#E4E1D8", boxShadow: "0 1px 2px rgba(26,26,26,0.04)" }}>
-      <div className="flex flex-wrap items-center justify-between gap-3 p-5 pb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 p-5 pb-2">
         <h2 className="text-lg font-bold text-[#1A1A1A]">Fleet Overview</h2>
         <div
           className="flex items-center gap-2 rounded-lg border px-3 py-2 w-full sm:w-72"
@@ -55,6 +58,9 @@ export default function EquipmentTable({ rows, checkedIn, onToggleCheck }) {
           />
         </div>
       </div>
+      <p className="px-5 pb-3 text-[11px] text-[#8A867A]">
+        <span className="text-[#2196F3] font-semibold">● Fuel %</span> is read from the HC-SR04 ultrasonic sensor · everything else (Engine/Idle Hrs, Temp, Vibration) is from the trained ML dataset, not a physical sensor.
+      </p>
 
       <div className="overflow-x-auto pb-2">
         <table className="w-full text-sm min-w-[1200px]">
@@ -64,11 +70,11 @@ export default function EquipmentTable({ rows, checkedIn, onToggleCheck }) {
               <th className="px-4 py-3 font-semibold">Type</th>
               <th className="px-4 py-3 font-semibold">Site</th>
               <th className="px-4 py-3 font-semibold">Operator</th>
-              <th className="px-4 py-3 font-semibold">Engine Hrs</th>
-              <th className="px-4 py-3 font-semibold">Idle Hrs</th>
-              <th className="px-4 py-3 font-semibold">Fuel %</th>
-              <th className="px-4 py-3 font-semibold">Temp °C</th>
-              <th className="px-4 py-3 font-semibold">Vibration</th>
+              <th className="px-4 py-3 font-semibold" title="From trained ML dataset">Engine Hrs</th>
+              <th className="px-4 py-3 font-semibold" title="From trained ML dataset">Idle Hrs</th>
+              <th className="px-4 py-3 font-semibold" title="From HC-SR04 ultrasonic sensor">Fuel %</th>
+              <th className="px-4 py-3 font-semibold" title="From trained ML dataset">Temp °C</th>
+              <th className="px-4 py-3 font-semibold" title="From trained ML dataset">Vibration</th>
               <th className="px-4 py-3 font-semibold">Health</th>
               <th className="px-4 py-3 font-semibold">Maintenance</th>
               <th className="px-4 py-3 font-semibold">Actions</th>
@@ -79,6 +85,9 @@ export default function EquipmentTable({ rows, checkedIn, onToggleCheck }) {
               const Icon = TYPE_ICON[eq.type] ?? Shovel;
               const vib = VIBRATION_STYLE[eq.vibration];
               const isCheckedIn = checkedIn[eq.id] ?? eq.operator !== null;
+              const liveFuel = allSensors.status === "live" ? allSensors.data?.[eq.id]?.latest : null;
+              const fuelLevel = liveFuel ? liveFuel.fuelLevel : eq.fuelLevel;
+              const fuelSource = liveFuel ? liveFuel.fuelDataSource : "model";
               return (
                 <tr
                   key={eq.id}
@@ -117,13 +126,14 @@ export default function EquipmentTable({ rows, checkedIn, onToggleCheck }) {
                       {eq.idleHours}h
                     </span>
                   </td>
-                  <td className="px-4 py-3 w-28">
+                  <td className="px-4 py-3 w-32">
                     <div className="flex items-center gap-2">
                       <div className="w-16">
-                        <ProgressBar value={eq.fuelLevel} color={eq.fuelLevel < 25 ? "#FF4444" : "#2196F3"} />
+                        <ProgressBar value={fuelLevel} color={fuelLevel < 25 ? "#FF4444" : "#2196F3"} />
                       </div>
-                      <span className="text-xs text-[#6E6B62]">{eq.fuelLevel}%</span>
+                      <span className="text-xs text-[#6E6B62]">{fuelLevel}%</span>
                     </div>
+                    <SensorValueBadge dataSource={fuelSource} className="mt-0.5" />
                   </td>
                   <td className="px-4 py-3">
                     <span className={eq.temperature > 85 ? "text-[#FF4444] font-semibold" : "text-[#1A1A1A]"}>

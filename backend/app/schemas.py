@@ -38,7 +38,10 @@ class MaintenancePredictionOut(BaseModel):
     maintenanceDue: bool
     confidence: float
     tier: str
+    healthStatus: str
     daysUntilService: float
+    hoursToFailure: float
+    failureProbability: float
     usedFields: list[str]
     defaultedFields: list[str]
 

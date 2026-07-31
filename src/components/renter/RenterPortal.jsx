@@ -2,14 +2,19 @@ import { useMemo, useState } from "react";
 import { Gauge, LogOut, MapPin, Clock3, AlertCircle, QrCode as QrIcon, Send } from "lucide-react";
 import { ProgressBar, HealthBadge, ToastStack, useToasts } from "../ui";
 import QrCode from "../QrCode";
-import { equipmentByRenter, isOverdue, overdueDays, remainingDays } from "../../data/equipment";
+import SensorValueBadge from "../SensorValueBadge";
+import { useAllSensorData } from "../../firebase/hooks";
+import { useMergedEquipment } from "../../firebase/useMergedEquipment";
+import { isOverdue, overdueDays, remainingDays } from "../../data/equipment";
 import { calcHealthScore, calcMaintenance } from "../../data/algorithms";
 
 const RENTER_NAME = "ABC Construction";
 
 export default function RenterPortal({ onLogout }) {
   const { toasts, pushToast } = useToasts();
-  const myEquipment = useMemo(() => equipmentByRenter(RENTER_NAME), []);
+  const allSensors = useAllSensorData();
+  const { equipment } = useMergedEquipment();
+  const myEquipment = useMemo(() => equipment.filter((eq) => eq.renter === RENTER_NAME), [equipment]);
   const rows = useMemo(
     () => myEquipment.map((eq) => ({ eq, health: calcHealthScore(eq), maintenance: calcMaintenance(eq) })),
     [myEquipment]
@@ -75,6 +80,9 @@ export default function RenterPortal({ onLogout }) {
           {rows.map(({ eq, health, maintenance }, i) => {
             const overdue = isOverdue(eq);
             const dayCount = overdue ? overdueDays(eq) : remainingDays(eq);
+            const liveFuel = allSensors.status === "live" ? allSensors.data?.[eq.id]?.latest : null;
+            const fuelLevel = liveFuel ? liveFuel.fuelLevel : eq.fuelLevel;
+            const fuelSource = liveFuel ? liveFuel.fuelDataSource : "model";
             return (
               <div
                 key={eq.id}
@@ -115,22 +123,24 @@ export default function RenterPortal({ onLogout }) {
 
                 <div>
                   <div className="flex justify-between text-[11px] text-[#8A867A] mb-1">
-                    <span>Engine Hours</span>
+                    <span>Engine Hours <span className="text-[#8A6A00]">· ML dataset</span></span>
                     <span>{eq.engineHours}h / 10h</span>
                   </div>
                   <ProgressBar value={eq.engineHours} max={10} color="#FFCD11" />
                 </div>
 
                 <div>
-                  <div className="flex justify-between text-[11px] text-[#8A867A] mb-1">
+                  <div className="flex justify-between text-[11px] text-[#8A867A] mb-1 items-center">
                     <span>Fuel Level</span>
-                    <span>{eq.fuelLevel}%</span>
+                    <span className="flex items-center gap-1.5">
+                      {fuelLevel}% <SensorValueBadge dataSource={fuelSource} />
+                    </span>
                   </div>
-                  <ProgressBar value={eq.fuelLevel} color={eq.fuelLevel < 25 ? "#FF4444" : "#2196F3"} />
+                  <ProgressBar value={fuelLevel} color={fuelLevel < 25 ? "#FF4444" : "#2196F3"} />
                 </div>
 
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-[#8A867A]">Temperature</span>
+                  <span className="text-[#8A867A]">Temperature <span className="text-[#8A6A00] text-[11px]">· ML dataset</span></span>
                   <span className={eq.temperature > 85 ? "text-[#FF4444] font-bold" : "text-[#1A1A1A] font-semibold"}>
                     {eq.temperature}°C
                   </span>

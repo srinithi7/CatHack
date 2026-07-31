@@ -80,7 +80,7 @@ export default function PredictiveMaintenancePanel({ maintenance, mlStatus = "of
         <h2 className="text-lg font-bold text-[#1A1A1A]">Predictive Maintenance — Fleet Forecast</h2>
         {mlStatus === "live" ? (
           <span className="ml-auto sm:ml-2 inline-flex items-center gap-1.5 text-[11px] font-semibold rounded-full px-2.5 py-1" style={{ background: "#00C85116", color: "#00954A" }}>
-            <Cpu size={12} /> Live ML model (rf_model + tier_model + days_model)
+            <Cpu size={12} /> Powered by Random Forest Model
           </span>
         ) : (
           <span className="ml-auto sm:ml-2 inline-flex items-center gap-1.5 text-[11px] font-semibold rounded-full px-2.5 py-1" style={{ background: "#F0EEE7", color: "#8A867A" }}>
@@ -90,7 +90,7 @@ export default function PredictiveMaintenancePanel({ maintenance, mlStatus = "of
       </div>
       <p className="text-xs text-[#6E6B62] mb-4">
         {mlStatus === "live"
-          ? "Trained Random Forest models scoring failure risk from live fleet telemetry."
+          ? "Random Forest Classifier (health status) + Random Forest Regressor (hours to failure, failure probability), serialized with Joblib."
           : "Rule-based failure-risk scoring across the fleet dataset."}
       </p>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { Gauge, Fuel, Thermometer, Timer, BatteryFull, KeyRound, CheckSquare, Square, LogOut } from "lucide-react";
+import { Gauge, Fuel, Thermometer, Timer, BatteryFull, KeyRound, CheckSquare, Square, LogOut, Radio } from "lucide-react";
 import { equipmentData } from "../../data/equipment";
-import { calcHealthScore } from "../../data/algorithms";
+import { calcHealthScore, STATUS_COLORS } from "../../data/algorithms";
+import { useSensorData, useMlPrediction } from "../../firebase/hooks";
+import SensorValueBadge from "../SensorValueBadge";
 
 const DEFAULT_OPERATOR = "OP101";
 const eq = equipmentData.find((e) => e.id === "EQX1001");
-const health = calcHealthScore(eq);
+const ruleBasedHealth = calcHealthScore(eq);
 
 const CHECKLIST_ITEMS = [
   "Seatbelt fastened",
@@ -24,6 +26,23 @@ export default function OperatorView({ onLogout }) {
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
+
+  const sensor = useSensorData(eq.id);
+  const mlPrediction = useMlPrediction(eq.id);
+
+  // Fuel comes from the HC-SR04 via Firebase when live; otherwise fall back
+  // to the dataset value, labeled honestly as "ML Dataset" rather than sensor.
+  const fuelLevel = sensor.status === "live" && sensor.data ? sensor.data.fuelLevel : eq.fuelLevel;
+  const fuelSource = sensor.status === "live" && sensor.data ? sensor.data.fuelDataSource : "model";
+
+  const health =
+    mlPrediction.status === "live" && mlPrediction.data
+      ? {
+          score: null,
+          status: mlPrediction.data.healthClass,
+          color: STATUS_COLORS[mlPrediction.data.healthClass] ?? ruleBasedHealth.color,
+        }
+      : ruleBasedHealth;
 
   const [session, setSession] = useState({ phase: "idle", startedAt: null, elapsed: 0, endedSummary: null });
   const timerRef = useRef(null);
@@ -98,35 +117,67 @@ export default function OperatorView({ onLogout }) {
           </div>
 
           <div className="mt-5">
-            <p className="text-5xl font-extrabold animate-pop-in" style={{ color: health.color }}>{health.score}</p>
-            <p className="text-xs text-[#8A867A] mt-1">Health Score — {health.status}</p>
+            {health.score !== null ? (
+              <p className="text-5xl font-extrabold animate-pop-in" style={{ color: health.color }}>{health.score}</p>
+            ) : (
+              <p className="text-3xl font-extrabold animate-pop-in" style={{ color: health.color }}>{health.status}</p>
+            )}
+            <p className="text-xs text-[#8A867A] mt-1">
+              {health.score !== null ? `Health Score — ${health.status}` : "Health Status"}
+            </p>
+            {mlPrediction.status === "live" && mlPrediction.data && (
+              <p className="text-[11px] text-[#8A6A00] mt-1">
+                ~{mlPrediction.data.hoursToMaintenance}h to maintenance · {mlPrediction.data.failureProbability}% failure probability
+              </p>
+            )}
+            <div className="flex justify-center mt-1.5">
+              <SensorValueBadge dataSource="model" />
+            </div>
           </div>
         </div>
 
         {/* Sensor Readings */}
-        <div className="grid grid-cols-2 gap-3">
-          <SensorCard icon={Fuel} label="Fuel Level" value={`${eq.fuelLevel}%`} color={eq.fuelLevel < 25 ? "#FF4444" : "#2196F3"} />
-          <SensorCard icon={Thermometer} label="Temperature" value={`${eq.temperature}°C`} color={eq.temperature > 85 ? "#FF4444" : "#00954A"} />
-          <SensorCard icon={Timer} label="Engine Hours" value={`${eq.engineHours} hrs today`} color="#C99A00" />
-          <SensorCard icon={BatteryFull} label="Battery" value={`${eq.batteryVoltage}V`} color={eq.batteryVoltage < 11.6 ? "#FF4444" : "#00954A"} />
+        <div>
+          <p className="text-xs font-bold text-[#6E6B62] uppercase tracking-wide mb-2 px-1">Live Readings</p>
+          <div className="grid grid-cols-2 gap-3">
+            <SensorCard icon={Fuel} label="Fuel Level" value={`${fuelLevel}%`} color={fuelLevel < 25 ? "#FF4444" : "#2196F3"} dataSource={fuelSource} />
+            <SensorCard icon={Thermometer} label="Temperature" value={`${eq.temperature}°C`} color={eq.temperature > 85 ? "#FF4444" : "#00954A"} dataSource="model" />
+            <SensorCard icon={Timer} label="Engine Hours" value={`${eq.engineHours} hrs today`} color="#C99A00" dataSource="model" />
+            <SensorCard icon={BatteryFull} label="Battery" value={`${eq.batteryVoltage}V`} color={eq.batteryVoltage < 11.6 ? "#FF4444" : "#00954A"} dataSource="model" />
+          </div>
         </div>
 
         {/* RFID Session Panel */}
         <div className="rounded-2xl border p-6 flex flex-col items-center gap-4" style={{ background: "#FFFFFF", borderColor: "#E4E1D8", boxShadow: "0 1px 2px rgba(26,26,26,0.04)" }}>
+          {sensor.status === "live" && sensor.data?.rfidStatus && (
+            <div className="w-full flex items-center justify-between rounded-lg px-3 py-2 text-xs" style={{ background: "#F5F9FE" }}>
+              <span className="text-[#4A473F]">
+                RC522 status: <b>{sensor.data.rfidStatus}</b>
+                {sensor.data.rfidOperator ? ` — ${sensor.data.rfidOperator}` : ""}
+              </span>
+              <SensorValueBadge dataSource={sensor.data.rfidDataSource} />
+            </div>
+          )}
+
           {session.phase === "idle" && (
-            <button
-              onClick={startScan}
-              className="w-full flex flex-col items-center justify-center gap-2 rounded-2xl py-8 text-lg font-extrabold bg-[#FFCD11] text-[#1A1A1A] hover:brightness-95 transition active:scale-[0.98]"
-            >
-              <KeyRound size={32} />
-              🔑 SCAN RFID TO START SESSION
-            </button>
+            <>
+              <button
+                onClick={startScan}
+                className="w-full flex flex-col items-center justify-center gap-2 rounded-2xl py-8 text-lg font-extrabold bg-[#FFCD11] text-[#1A1A1A] hover:brightness-95 transition active:scale-[0.98]"
+              >
+                <KeyRound size={32} />
+                🔑 SCAN RFID TO START SESSION
+              </button>
+              <p className="flex items-center gap-1 text-[10px] font-semibold text-[#8A867A] -mt-2">
+                <Radio size={10} className="text-[#2196F3]" /> RC522 RFID Sensor
+              </p>
+            </>
           )}
 
           {session.phase === "scanning" && (
             <div className="w-full flex flex-col items-center justify-center gap-3 py-8">
               <div className="w-14 h-14 rounded-full border-4 border-[#E4E1D8] border-t-[#FFCD11] animate-spin-slow" />
-              <p className="text-sm text-[#6E6B62]">Scanning RFID tag...</p>
+              <p className="text-sm text-[#6E6B62]">Scanning RC522 RFID tag...</p>
             </div>
           )}
 
@@ -207,12 +258,13 @@ export default function OperatorView({ onLogout }) {
   );
 }
 
-function SensorCard({ icon: Icon, label, value, color }) {
+function SensorCard({ icon: Icon, label, value, color, dataSource }) {
   return (
     <div className="rounded-2xl border p-4 flex flex-col items-center gap-1.5 text-center" style={{ background: "#FFFFFF", borderColor: "#E4E1D8", boxShadow: "0 1px 2px rgba(26,26,26,0.04)" }}>
       <Icon size={22} style={{ color }} />
       <p className="text-lg font-extrabold text-[#1A1A1A]">{value}</p>
       <p className="text-[11px] text-[#8A867A]">{label}</p>
+      <SensorValueBadge dataSource={dataSource} className="mt-0.5" />
     </div>
   );
 }

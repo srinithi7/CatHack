@@ -39,9 +39,10 @@ async function singleEquipmentPrediction(equipmentId) {
     const [result] = await predictFleet([eq]);
     const { maintenance: m, anomaly: a } = result;
     const lines = [
-      `ML prediction for ${eq.id} (${eq.type}):`,
-      `• Maintenance due: ${m.maintenanceDue ? "Yes" : "No"} (${Math.round(m.confidence * 100)}% confidence)`,
-      `• Tier: ${m.tier} — next service in ~${m.daysUntilService} day(s)`,
+      `Random Forest prediction for ${eq.id} (${eq.type}):`,
+      `• Health status: ${m.healthStatus} (tier ${m.tier})`,
+      `• Maintenance due: ${m.maintenanceDue ? "Yes" : "No"} — ${m.failureProbability}% failure probability`,
+      `• Hours to failure: ~${m.hoursToFailure} hrs (~${m.daysUntilService} days)`,
       `• Anomaly: ${a.isAnomaly ? "Flagged" : "Normal"}${a.reasons.length ? ` — ${a.reasons[0].feature.replace(/_/g, " ")} is ${a.reasons[0].direction} (${a.reasons[0].value} vs fleet avg ${a.reasons[0].fleetMean})` : ""}`,
     ];
     return lines.join("\n");
@@ -191,11 +192,13 @@ export async function getBotResponse(rawInput, now = new Date()) {
   return HELP_MENU;
 }
 
-export const BOT_WELCOME = `Hello! I am your AI fleet assistant. I can help you with:
+export const BOT_WELCOME = `Hi! I'm CAT Bot — your AI-powered fleet assistant. Ask me anything about your equipment.
+
+I can help you with:
 • Equipment status and health scores
 • Anomaly detection and alerts
 • Predictive maintenance schedule (live ML model)
 • Demand forecasting (live ML model)
 • Revenue loss analysis
 
-Ask me "predict EQX1001" for a single-machine ML prediction. Just ask me anything!`;
+Try asking "predict EQX1001" for a single-machine ML prediction.`;

@@ -14,7 +14,7 @@ import BottomStats from "./BottomStats";
 import DemandPlanner from "./DemandPlanner";
 
 function mlMaintenanceToPanelShape(mlResult) {
-  const { tier, daysUntilService, maintenanceDue, confidence } = mlResult;
+  const { tier, hoursToFailure, failureProbability, maintenanceDue, healthStatus } = mlResult;
   let level = "normal";
   let label = "Next 15 Days";
   if (tier === "PM1") {
@@ -24,11 +24,10 @@ function mlMaintenanceToPanelShape(mlResult) {
     level = "warning";
     label = "PM2 · Warning";
   }
-  const daysText =
-    daysUntilService <= 1 ? "within 24 hours" : `in ~${Math.round(daysUntilService)} day(s)`;
+  const hoursText = hoursToFailure <= 24 ? "within 24 hours" : `in ~${Math.round(hoursToFailure)} hrs`;
   const reason = maintenanceDue
-    ? `ML model predicts ${tier} service due ${daysText} (${Math.round(confidence * 100)}% confidence).`
-    : `ML model finds no service due — next check in ~${Math.round(daysUntilService)} day(s).`;
+    ? `Random Forest Regressor predicts service due ${hoursText} — ${failureProbability}% failure probability. Status: ${healthStatus}.`
+    : `No service due — ~${Math.round(hoursToFailure)} hrs to failure, ${failureProbability}% failure probability. Status: ${healthStatus}.`;
   return { level, label, color: MAINTENANCE_COLORS[level], reasons: [reason] };
 }
 
